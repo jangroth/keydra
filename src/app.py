@@ -1,16 +1,13 @@
-import boto3
 import logging
 import os
-
 from functools import reduce
+
+import boto3
 
 from keydra import loader
 from keydra import logging as km_logging
-
 from keydra.clients.aws.cloudwatch import CloudwatchClient
-
 from keydra.config import KeydraConfig
-
 from keydra.keydra import Keydra
 
 km_logging.setup_logging(logging.INFO)
@@ -19,7 +16,8 @@ km_logging.setup_logging(logging.INFO)
 # Global variables are reused across execution contexts (if available)
 SESSION = boto3.Session()
 
-ENV_CONFIG_PREFIX = 'KEYDRA_CFG'
+ENV_CONFIG_PREFIX = "KEYDRA_CFG"
+DEFAULT_TRIGGER = 'nightly'
 
 LOGGER = km_logging.get_logger()
 
@@ -72,6 +70,7 @@ def _load_env_config():
 
         segments.append(value)
 
+        # FIXME: this is not catering for variables that have '_' in their name, like REPOSITORY_BRANCH
         config = _merge_dicts(
             config,
             reduce(lambda x, y: {y: x}, segments[::-1])
@@ -122,7 +121,7 @@ def lambda_handler(event, context):
 
         https://docs.aws.amazon.com/lambda/latest/dg/python-context-object.html
     '''
-    trigger = event.get('trigger', 'nightly')
+    trigger = event.get("trigger", DEFAULT_TRIGGER)
     run_for_secrets = event.get('secrets', None)
     debug_mode = event.get('debug', False)
 
@@ -157,3 +156,20 @@ def lambda_handler(event, context):
         raise Exception(resp)
 
     return resp
+
+
+if __name__ == "__main__":
+    os.environ["KEYDRA_CFG_PROVIDER"] = "gitlab"
+    os.environ["KEYDRA_CFG_CONFIG_ACCOUNTUSERNAME"] = "dummy"
+    os.environ["KEYDRA_CFG_CONFIG_SECRETS_REPOSITORY"] = "adatree-source/infra/platform/iam-policies"
+    os.environ["KEYDRA_CFG_CONFIG_SECRETS_REPOSITORYBRANCH"] = "feature/en-479-key-rotation"
+    os.environ["KEYDRA_CFG_CONFIG_SECRETS_PATH"] = "org-machine-roles/secret-rotation/keydra/secrets.yaml"
+    os.environ["KEYDRA_CFG_CONFIG_SECRETS_FILETYPE"] = "yaml"
+    os.environ["KEYDRA_CFG_CONFIG_ENVIRONMENTS_REPOSITORY"] = "adatree-source/infra/platform/iam-policies"
+    os.environ["KEYDRA_CFG_CONFIG_ENVIRONMENTS_REPOSITORYBRANCH"] = "feature/en-479-key-rotation"
+    os.environ["KEYDRA_CFG_CONFIG_ENVIRONMENTS_PATH"] = "org-machine-roles/secret-rotation/keydra/environments.yaml"
+    os.environ["KEYDRA_CFG_CONFIG_ENVIRONMENTS_FILETYPE"] = "yaml"
+
+    event = {"trigger": "nightly", "debug": True}
+
+    lambda_handler(event, {})
